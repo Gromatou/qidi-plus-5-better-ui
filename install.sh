@@ -4,7 +4,7 @@
 # =============================================================================
 #  Run ON THE PRINTER as user 'qidi':
 #
-#      curl -sSL https://raw.githubusercontent.com/Gromatou/qidi-plus5-helixscreen/main/install.sh | sh
+#      curl -sSL https://raw.githubusercontent.com/Gromatou/qidi-plus-5-better-ui/main/install.sh | sh
 #  (or clone this repo and run:  sh install.sh)
 #
 #  What it does:

@@ -13,7 +13,7 @@ SSH into the printer (stock user `qidi`, default password `qiditech`) and run:
 
 ```sh
 ssh qidi@<PRINTER_IP>
-curl -sSL https://raw.githubusercontent.com/Gromatou/qidi-plus5-helixscreen/main/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/Gromatou/qidi-plus-5-better-ui/main/install.sh | sh
 ```
 
 Then pick **“QIDI Plus 5”** in the screen's first-run wizard.
