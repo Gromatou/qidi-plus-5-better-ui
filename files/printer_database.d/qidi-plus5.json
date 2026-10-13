@@ -1,0 +1,126 @@
+{
+  "printers": [
+    {
+      "id": "qidi_plus_5",
+      "name": "Qidi Plus 5",
+      "manufacturer": "QIDI",
+      "image": "qidi-plus-5.png",
+      "enclosed": true,
+      "preset": "qidi_plus5",
+      "print_start_profile": "qidi",
+      "ams_type": "qidi_box",
+      "notes": "New-generation QIDI board (RK3308 host, STM32F407 main MCU) with a 480x800 Linux framebuffer display, so HelixScreen runs on-device. Same generation as the Q2 and Max 4. Compatible with the QIDI Box filament changer (4-slot hub-style, chainable to 16). The panel is a portrait 480x800 mounted sideways; HelixScreen's rotation is set by the preset.",
+      "heuristics": [
+        {
+          "type": "kinematics_exclude",
+          "field": "kinematics",
+          "pattern": "cartesian",
+          "reason": "Qidi Plus 5 is corexy; a cartesian printer is never a Qidi (telemetry: 100% of Qidi report corexy)"
+        },
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 40,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "plus5",
+          "confidence": 95,
+          "reason": "Hostname contains 'plus5'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "plus-5",
+          "confidence": 95,
+          "reason": "Hostname contains 'plus-5'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "qidi",
+          "confidence": 50,
+          "reason": "Hostname contains 'qidi'"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 324,
+          "max_x": 342,
+          "min_y": 336,
+          "max_y": 354,
+          "confidence": 92,
+          "identifying": true,
+          "reason": "Stepper travel ~333x345mm: the Qidi Plus 5 bed. Distinct from the Q2 (~275) and Max 4 (~390) in the same framebuffer family, so the plus 5 is identified from among them by bed size (guarded by corexy kinematics and the QIDI chamber)."
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "heater_generic chamber",
+          "confidence": 80,
+          "corroborating": true,
+          "reason": "Active chamber heater (QIDI enclosed range; class evidence)"
+        },
+        {
+          "type": "sensor_match",
+          "field": "sensors",
+          "pattern": "Chamber_Thermal_Protection",
+          "confidence": 50,
+          "corroborating": true,
+          "reason": "Chamber thermal protection sensor (QIDI stock config)"
+        },
+        {
+          "type": "fan_match",
+          "field": "fans",
+          "pattern": "auxiliary_cooling_fan",
+          "confidence": 80,
+          "corroborating": true,
+          "reason": "Auxiliary cooling fan (QIDI new-gen layout)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "multi_color_controller",
+          "confidence": 45,
+          "corroborating": true,
+          "reason": "QIDI multi-color controller object (QIDI Box host; shared by the Q2/Plus 4/Max 4)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "probe_air",
+          "confidence": 40,
+          "corroborating": true,
+          "reason": "probe_air object (QIDI stock firmware, shared across the range)"
+        },
+        {
+          "type": "macro_match",
+          "field": "macros",
+          "pattern": "M4029",
+          "confidence": 65,
+          "corroborating": true,
+          "reason": "M4029 calibration macro (QIDI stock firmware, shared across the range)"
+        },
+        {
+          "type": "macro_match",
+          "field": "macros",
+          "pattern": "CLEAR_NOZZLE",
+          "confidence": 60,
+          "corroborating": true,
+          "reason": "CLEAR_NOZZLE macro (common on QIDI printers)"
+        },
+        {
+          "type": "mcu_match",
+          "field": "mcu",
+          "pattern": "STM32F407",
+          "confidence": 35,
+          "corroborating": true,
+          "reason": "STM32F407 main MCU (QIDI new-generation board)"
+        }
+      ]
+    }
+  ]
+}
