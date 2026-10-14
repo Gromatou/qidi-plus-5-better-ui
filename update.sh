@@ -8,9 +8,9 @@
 #
 #    sh update.sh                   # check + apply now
 #    sh update.sh --check           # only report installed vs latest version
-#    sh update.sh --quiet           # for the timer (minimal output)
-#    sh update.sh --install-timer   # enable a daily automatic run (needs sudo)
-#    sh update.sh --uninstall-timer # disable the automatic run
+#    sh update.sh --quiet           # for the boot service (minimal output)
+#    sh update.sh --enable-boot     # update automatically at every boot (sudo)
+#    sh update.sh --disable-boot    # disable the automatic boot update
 #
 #  Safe to run any time (even mid-print: it only writes config files).
 # =============================================================================
@@ -36,14 +36,15 @@ ok()   { [ "$QUIET" = 1 ] || printf '\033[0;32m%s\033[0m\n' "$*"; }
 info() { [ "$QUIET" = 1 ] || printf '%s\n' "$*"; }
 
 SVC=/etc/systemd/system/qidi-plus-5-better-ui-update.service
-TMR=/etc/systemd/system/qidi-plus-5-better-ui-update.timer
+OLD_TMR=/etc/systemd/system/qidi-plus-5-better-ui-update.timer
 
-# Disabling the timer needs no network and must not re-apply anything.
-if [ "$MODE" = "--uninstall-timer" ]; then
-    sudo systemctl disable --now qidi-plus-5-better-ui-update.timer 2>/dev/null || true
-    sudo rm -f "$SVC" "$TMR"
+# Disabling needs no network and must not re-apply anything.
+if [ "$MODE" = "--disable-boot" ] || [ "$MODE" = "--uninstall-timer" ]; then
+    sudo systemctl disable --now qidi-plus-5-better-ui-update.service 2>/dev/null || true
+    sudo systemctl disable --now qidi-plus-5-better-ui-update.timer   2>/dev/null || true
+    sudo rm -f "$SVC" "$OLD_TMR"
     sudo systemctl daemon-reload 2>/dev/null || true
-    ok "Daily auto-update disabled"
+    ok "Boot-time auto-update disabled"
     exit 0
 fi
 
@@ -96,13 +97,13 @@ printf '%s\n' "${remote_ver:-unknown}" > "$VER_FILE"
 [ -f "$SELF" ] || cp -f "${src}/update.sh" "$SELF" 2>/dev/null || true
 ok "Up to date (${remote_ver:-unknown}). Klipper changes load at the next FIRMWARE_RESTART."
 
-# --- daily auto-update timer (systemd) ---------------------------------------
-if [ "$MODE" = "--install-timer" ]; then
+# --- automatic update at boot (systemd oneshot; no cron needed) --------------
+if [ "$MODE" = "--enable-boot" ] || [ "$MODE" = "--install-timer" ]; then
     mkdir -p "$STATE_DIR"
     cp -f "${src}/update.sh" "$SELF"; chmod +x "$SELF"
     sudo tee "$SVC" >/dev/null <<UNIT
 [Unit]
-Description=QIDI Plus 5 better-UI — pull latest Klipper macro fixes + profile
+Description=QIDI Plus 5 better-UI — pull latest Klipper macro fixes + profile at boot
 After=network-online.target
 Wants=network-online.target
 
@@ -110,21 +111,12 @@ Wants=network-online.target
 Type=oneshot
 User=${KS_USER}
 ExecStart=/bin/sh ${SELF} --quiet
-UNIT
-    sudo tee "$TMR" >/dev/null <<UNIT
-[Unit]
-Description=Daily QIDI Plus 5 better-UI update
-
-[Timer]
-OnBootSec=15min
-OnUnitActiveSec=1d
-Persistent=true
-RandomizedDelaySec=15min
 
 [Install]
-WantedBy=timers.target
+WantedBy=multi-user.target
 UNIT
+    sudo rm -f "$OLD_TMR"
     sudo systemctl daemon-reload
-    sudo systemctl enable --now qidi-plus-5-better-ui-update.timer
-    ok "Daily auto-update enabled (qidi-plus-5-better-ui-update.timer)"
+    sudo systemctl enable --now qidi-plus-5-better-ui-update.service
+    ok "Auto-update enabled at boot (qidi-plus-5-better-ui-update.service)"
 fi

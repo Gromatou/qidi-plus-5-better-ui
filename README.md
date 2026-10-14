@@ -17,7 +17,7 @@ curl -sSL https://raw.githubusercontent.com/Gromatou/qidi-plus-5-better-ui/main/
 ```
 
 Then pick **“QIDI Plus 5”** in the screen's first-run wizard. The installer also
-switches on a **daily auto-update** (see below). To refresh by hand any time:
+switches on **auto-update at boot** (see below). To refresh by hand any time:
 
 ```sh
 sh update.sh
@@ -64,13 +64,16 @@ the preset (idempotent) and refreshes the Plus 5 profile overlay:
 ```sh
 sh update.sh                     # check + apply now
 sh update.sh --check             # just show installed vs latest version
-sh update.sh --install-timer     # enable a daily run (systemd timer, needs sudo)
-sh update.sh --uninstall-timer   # disable it
+sh update.sh --enable-boot       # update automatically at every boot (needs sudo)
+sh update.sh --disable-boot      # disable it
 ```
 
-The daily timer writes files only and **never restarts Klipper by itself** — the
-macro changes take effect at the next `FIRMWARE_RESTART`, so a running print is
-never disturbed. `install.sh` enables the timer for you.
+Auto-update is a **systemd oneshot service that runs at boot** (the QIDI host has
+no `cron` daemon). It writes files only and **never restarts Klipper by itself** —
+the macro changes take effect at the next `FIRMWARE_RESTART`, so a running print
+is never disturbed. A handy side effect: after a QIDI firmware update wipes the
+macros, the next reboot restores the fixes automatically. `install.sh` enables it
+for you.
 
 ### Why a script and not a `[include]`
 
@@ -90,7 +93,7 @@ in place is the clean way to change their behaviour.
 3. Adds the QIDI Plus 5 printer profile (database entry + preset + image) so the
    machine is detected *before* it ships in a HelixScreen release.
 4. Reloads Klipper (`FIRMWARE_RESTART`) and restarts the screen UI.
-5. Enables the daily auto-update.
+5. Enables auto-update at boot.
 
 ## Uninstall
 
@@ -103,7 +106,7 @@ sh uninstall.sh --helixscreen   # also uninstall HelixScreen (restores the stock
 
 ```
 install.sh / uninstall.sh          one-command setup / teardown
-update.sh                          auto-update (GitHub → machine) + systemd timer
+update.sh                          auto-update (GitHub → machine) + boot service
 klipper/apply.sh  klipper/revert.sh  the Klipper macro fixes (idempotent, reversible)
 VERSION                            preset version, shown by update.sh --check
 files/printer_database.d/…         Plus 5 auto-detection entry (pre-release)

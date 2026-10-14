@@ -25,13 +25,14 @@ rm -f "${HS_ASSETS}/config/presets/qidi_plus5.json"
 rm -f "${HS_ASSETS}/images/printers/qidi-plus-5.png"
 echo "removed dropped profile files"
 
-say "[3/3] Disabling the daily auto-update timer"
-sudo systemctl disable --now qidi-plus-5-better-ui-update.timer 2>/dev/null || true
+say "[3/3] Disabling the boot-time auto-update"
+sudo systemctl disable --now qidi-plus-5-better-ui-update.service 2>/dev/null || true
+sudo systemctl disable --now qidi-plus-5-better-ui-update.timer   2>/dev/null || true
 rm -f "$HOME_DIR/.qidi-plus-5-better-ui/update.sh"
 sudo rm -f /etc/systemd/system/qidi-plus-5-better-ui-update.service \
            /etc/systemd/system/qidi-plus-5-better-ui-update.timer
 sudo systemctl daemon-reload 2>/dev/null || true
-echo "auto-update timer removed"
+echo "auto-update disabled"
 
 if [ "${1:-}" = "--helixscreen" ]; then
     say "Uninstalling HelixScreen (restores the stock QIDI UI)"

@@ -15,8 +15,8 @@
 #    3. Adds the QIDI Plus 5 printer profile (database entry + preset + image)
 #       so it shows up and is detected BEFORE it ships in a HelixScreen release.
 #    4. Reloads Klipper and the screen UI.
-#    5. Enables a daily auto-update (systemd timer) that pulls future macro
-#       fixes from GitHub.        -> update.sh   (disable: --uninstall-timer)
+#    5. Enables auto-update at boot (a systemd oneshot service) that pulls
+#       future macro fixes from GitHub.     -> update.sh   (disable: --disable-boot)
 #
 #  Idempotent. Re-running updates HelixScreen and re-checks the Klipper edits.
 # =============================================================================
@@ -80,11 +80,11 @@ curl -s -m 10 -G "http://127.0.0.1:7125/printer/gcode/script" \
 sudo systemctl restart helixscreen 2>/dev/null || true
 
 # =============================================================================
-say "[5/5] Enabling daily auto-update"
-if sh "${HERE}/update.sh" --install-timer >/dev/null 2>&1; then
-    ok "Daily auto-update enabled (systemd timer)"
+say "[5/5] Enabling auto-update at boot"
+if sh "${HERE}/update.sh" --enable-boot >/dev/null 2>&1; then
+    ok "Auto-update enabled at boot (systemd service)"
 else
-    echo "  skipped — enable later with: sh update.sh --install-timer"
+    echo "  skipped — enable later with: sh update.sh --enable-boot"
 fi
 
 cat <<EOF
@@ -93,9 +93,9 @@ $(ok "Done.")
   - On the screen's first-run wizard, pick:  Qidi Plus 5
   - Do ONE manual mesh (Bed Mesh) so the saved profile exists — print start
     will then load it instead of re-probing.
-  - Updates are pulled from GitHub once a day; apply one now with:
+  - Macro fixes are pulled from GitHub at every boot; apply one now with:
         sh update.sh
-  - Disable auto-update:  sh update.sh --uninstall-timer
+  - Disable auto-update:  sh update.sh --disable-boot
   - Revert the Klipper edits:   sh ${HERE}/klipper/revert.sh
   - Remove HelixScreen:         curl -sSL https://releases.helixscreen.org/install.sh | sh -s -- --uninstall
 EOF
