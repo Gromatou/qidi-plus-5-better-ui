@@ -80,10 +80,12 @@ gcode:
 
 # >>> HelixScreen QIDI+5 preset: chamber head-start soak >>>
 [gcode_macro _CHAMBER_CFG]
-# Seconds the first, uncooled layers take. The chamber is only waited on until it
-# can still reach the target within this head-start, then it finishes heating
-# during the print. Tune it (per material) with:  SET_CHAMBER_HEADSTART S=<sec>
-variable_headstart_sec: 180
+# Head-start (seconds): roughly how long the first, uncooled layers take.
+# Default 0 = cautious: wait until target (like stock). Set it (e.g. 180) to
+# start earlier and let the chamber finish heating during those layers.
+variable_headstart_sec: 0
+# Safety margin applied to the estimated heat-up time (1.2 = +20%).
+variable_margin: 1.2
 # Measurement window (seconds) used to estimate the chamber heating rate.
 variable_sample_sec: 15
 gcode: {}
@@ -97,21 +99,26 @@ gcode:
 gcode:
   {% set target = params.S|float %}
   {% set headstart = params.HEADSTART|default(printer["gcode_macro _CHAMBER_CFG"].headstart_sec)|float %}
+  {% set margin = printer["gcode_macro _CHAMBER_CFG"].margin|float %}
   {% set sample = printer["gcode_macro _CHAMBER_CFG"].sample_sec|float %}
   {% set t0 = printer["gcode_macro _CHAMBER_SOAK_SAMPLE"].t0 %}
   {% set t1 = printer["heater_generic chamber"].temperature %}
   {% set rate = (t1 - t0) / sample if sample > 0.0 else 0.0 %}
-  {% if rate > 0.02 %}
-    {% set eta = (target - t1) / rate %}
-    {% set threshold = [[target - rate * headstart, 0.0]|max, target]|min %}
+  {% if rate > 0.02 and headstart > 0.0 %}
+    {% set eta = (target - t1) / rate * margin %}
+    {% set threshold = [[target - rate * headstart / margin, 0.0]|max, target]|min %}
     {% if eta <= headstart %}
-      {% set dummy = action_respond_info("Chamber soak: %.2f C/s, ETA %.0fs <= head-start %.0fs: printing now, chamber finishes during the first layers." % (rate, eta, headstart)) %}
+      {% set dummy = action_respond_info("Chamber soak: ETA %.0fs (incl. %.0f%% margin) <= head-start %.0fs: printing now, chamber finishes during the first layers." % (eta, (margin - 1.0) * 100.0, headstart)) %}
     {% else %}
-      {% set dummy = action_respond_info("Chamber soak: %.2f C/s, ETA %.0fs, head-start %.0fs: waiting only until %.1f C." % (rate, eta, headstart, threshold)) %}
+      {% set dummy = action_respond_info("Chamber soak: ETA %.0fs (incl. %.0f%% margin) > head-start %.0fs: waiting only until %.1f C." % (eta, (margin - 1.0) * 100.0, headstart, threshold)) %}
       TEMPERATURE_WAIT SENSOR="heater_generic chamber" MINIMUM={threshold}
     {% endif %}
   {% else %}
-    {% set dummy = action_respond_info("Chamber soak: heating rate too low to estimate (%.3f C/s): waiting for the full target." % rate) %}
+    {% if rate <= 0.02 %}
+      {% set dummy = action_respond_info("Chamber soak: heating rate too low to estimate (%.3f C/s): waiting for the full target." % rate) %}
+    {% else %}
+      {% set dummy = action_respond_info("Chamber soak: no head-start set: waiting for the full target (stock behaviour).") %}
+    {% endif %}
     TEMPERATURE_WAIT SENSOR="heater_generic chamber" MINIMUM={([target, 65]|min)-2}
   {% endif %}
 
