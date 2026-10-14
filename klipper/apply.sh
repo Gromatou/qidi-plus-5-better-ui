@@ -4,12 +4,15 @@
 #  Run ON THE PRINTER:  sh apply.sh
 #  Then restart Klipper: FIRMWARE_RESTART  (or reboot)
 # =============================================================================
-# Fixes two QIDI Plus 5 stock-firmware behaviours:
+# Fixes three QIDI Plus 5 stock-firmware behaviours:
 #   (a) a MANUAL bed mesh probed WITHOUT levelling the two Z motors -> one side
 #       ~1mm higher. Now BED_MESH_CALIBRATE always runs G28(if needed) +
 #       Z_TILT_ADJUST before probing.
 #   (b) PRINT_START re-meshed on EVERY print. Now it loads the saved mesh
 #       (bedmesh_before_print=False, and PRINT_END keeps it off: G31 -> G32).
+#   (c) the slicer emits M106 P3 S255 at print start; the stock M106 macro then
+#       turned the chamber heater OFF (TARGET=0), so a 50C chamber was killed
+#       the instant printing began. Now the fan only stops an idle chamber.
 #
 # Backups: <file>.helixplus5.bak  (restore with revert.sh)
 set -eu
@@ -86,6 +89,27 @@ else:
         print("start_end.cfg  : PRINT_END G31 -> G32")
     else:
         print("start_end.cfg  : no standalone G31 found, SKIPPED")
+
+# --- (c) chamber circulation fan must not cut the chamber heater -----------
+p = os.path.join(cfg, "fans.cfg")
+s = open(p).read()
+if "HelixScreen QIDI+5 preset: keep chamber heating" in s:
+    print("fans.cfg       : already applied")
+else:
+    old_if = ('{% if printer["heater_generic chamber"] is defined '
+              'and params.S|float >0.0 %}')
+    new_if = ('{% if printer["heater_generic chamber"] is defined '
+              'and params.S|float >0.0\n'
+              '                and printer["heater_generic chamber"].target == 0 %}')
+    if old_if in s:
+        s2 = s.replace(old_if, new_if, 1).replace(
+            "SET_HEATER_TEMPERATURE_SCALED HEATER=chamber TARGET=0",
+            "SET_HEATER_TEMPERATURE_SCALED HEATER=chamber TARGET=0"
+            "  # HelixScreen QIDI+5 preset: keep chamber heating", 1)
+        backup(p); open(p, "w").write(s2)
+        print("fans.cfg       : M106 P3 no longer cuts an actively-heated chamber")
+    else:
+        print("fans.cfg       : M106 P3 condition not found, SKIPPED")
 PY
 
 echo

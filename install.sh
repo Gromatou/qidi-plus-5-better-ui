@@ -8,20 +8,36 @@
 #  (or clone this repo and run:  sh install.sh)
 #
 #  What it does:
-#    1. Applies the Klipper preset (Z-level before a manual mesh; no re-mesh on
-#       every print).        -> klipper/apply.sh   (revert: klipper/revert.sh)
+#    1. Applies the Klipper macro preset (Z-level before a manual mesh; no
+#       re-mesh on every print; chamber heater stays on while printing).
+#                                                        -> klipper/apply.sh
 #    2. Installs (or updates) HelixScreen with the official installer.
 #    3. Adds the QIDI Plus 5 printer profile (database entry + preset + image)
 #       so it shows up and is detected BEFORE it ships in a HelixScreen release.
 #    4. Reloads Klipper and the screen UI.
+#    5. Enables a daily auto-update (systemd timer) that pulls future macro
+#       fixes from GitHub.        -> update.sh   (disable: --uninstall-timer)
 #
 #  Idempotent. Re-running updates HelixScreen and re-checks the Klipper edits.
 # =============================================================================
 set -eu
 
-HERE="$(cd "$(dirname "$0")" && pwd)"
+HERE="$(cd "$(dirname "$0")" 2>/dev/null && pwd || echo .)"
+
+# Bootstrap so `curl ... | sh` works: fetch the repo when there is no checkout.
+if [ ! -f "${HERE}/klipper/apply.sh" ]; then
+    _tmp="$(mktemp -d)"
+    echo "Fetching qidi-plus-5-better-ui..."
+    curl -fsSL -m 90 \
+        "https://github.com/Gromatou/qidi-plus-5-better-ui/archive/refs/heads/main.tar.gz" \
+        -o "$_tmp/repo.tgz" || { echo "Download failed."; exit 1; }
+    tar -xzf "$_tmp/repo.tgz" -C "$_tmp"
+    exec sh "$_tmp/qidi-plus-5-better-ui-main/install.sh" "$@"
+fi
+
 KS_USER="${KS_USER:-$(id -un)}"
-HOME_DIR="$(getent passwd "$KS_USER" | cut -d: -f6 2>/dev/null || echo "$HOME")"
+HOME_DIR="$(getent passwd "$KS_USER" 2>/dev/null | cut -d: -f6)"
+[ -n "$HOME_DIR" ] || HOME_DIR="$HOME"
 HS_DIR="${HOME_DIR}/helixscreen"
 HS_ASSETS="${HS_DIR}/assets"
 HS_CONFIG="${HOME_DIR}/printer_data/config/helixscreen"
@@ -35,11 +51,11 @@ ok()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
     echo "This does not look like a QIDI Plus 5 (no ~/QIDI_Client). Aborting."; exit 1; }
 
 # =============================================================================
-say "[1/4] Applying the Klipper preset"
+say "[1/5] Applying the Klipper preset"
 sh "${HERE}/klipper/apply.sh"
 
 # =============================================================================
-say "[2/4] Installing / updating HelixScreen"
+say "[2/5] Installing / updating HelixScreen"
 if [ -d "$HS_DIR" ]; then
     curl -sSL https://releases.helixscreen.org/install.sh | sh -s -- --update
 else
@@ -48,7 +64,7 @@ fi
 ok "HelixScreen installed"
 
 # =============================================================================
-say "[3/4] Adding the QIDI Plus 5 profile (pre-release)"
+say "[3/5] Adding the QIDI Plus 5 profile (pre-release)"
 mkdir -p "${HS_CONFIG}/printer_database.d"
 cp -f "${HERE}/files/printer_database.d/qidi-plus5.json" \
       "${HS_CONFIG}/printer_database.d/qidi-plus5.json"
@@ -58,10 +74,18 @@ cp -f "${HERE}/files/images/printers/qidi-plus-5.png" "${HS_ASSETS}/images/print
 ok "Plus 5 profile + preset + image in place"
 
 # =============================================================================
-say "[4/4] Reloading Klipper and the screen UI"
+say "[4/5] Reloading Klipper and the screen UI"
 curl -s -m 10 -G "http://127.0.0.1:7125/printer/gcode/script" \
      --data-urlencode "script=FIRMWARE_RESTART" >/dev/null 2>&1 || true
 sudo systemctl restart helixscreen 2>/dev/null || true
+
+# =============================================================================
+say "[5/5] Enabling daily auto-update"
+if sh "${HERE}/update.sh" --install-timer >/dev/null 2>&1; then
+    ok "Daily auto-update enabled (systemd timer)"
+else
+    echo "  skipped — enable later with: sh update.sh --install-timer"
+fi
 
 cat <<EOF
 
@@ -69,6 +93,9 @@ $(ok "Done.")
   - On the screen's first-run wizard, pick:  Qidi Plus 5
   - Do ONE manual mesh (Bed Mesh) so the saved profile exists — print start
     will then load it instead of re-probing.
+  - Updates are pulled from GitHub once a day; apply one now with:
+        sh update.sh
+  - Disable auto-update:  sh update.sh --uninstall-timer
   - Revert the Klipper edits:   sh ${HERE}/klipper/revert.sh
   - Remove HelixScreen:         curl -sSL https://releases.helixscreen.org/install.sh | sh -s -- --uninstall
 EOF
