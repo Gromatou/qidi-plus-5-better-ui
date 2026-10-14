@@ -80,11 +80,12 @@ curl -s -m 10 -G "http://127.0.0.1:7125/printer/gcode/script" \
 sudo systemctl restart helixscreen 2>/dev/null || true
 
 # =============================================================================
-say "[5/5] Enabling auto-update at boot"
-if sh "${HERE}/update.sh" --enable-boot >/dev/null 2>&1; then
+say "[5/5] Enabling auto-update at boot (admin rights needed)"
+echo "      (enter your password if sudo asks — default is 'qiditech')"
+if sh "${HERE}/update.sh" --enable-boot; then
     ok "Auto-update enabled at boot (systemd service)"
 else
-    echo "  skipped — enable later with: sh update.sh --enable-boot"
+    echo "  skipped — enable later with:  sh update.sh --enable-boot"
 fi
 
 cat <<EOF
