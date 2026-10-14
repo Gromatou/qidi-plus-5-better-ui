@@ -4,7 +4,7 @@
 #  Run ON THE PRINTER:  sh apply.sh
 #  Then restart Klipper: FIRMWARE_RESTART  (or reboot)
 # =============================================================================
-# Fixes three QIDI Plus 5 stock-firmware behaviours:
+# Fixes four QIDI Plus 5 stock-firmware behaviours:
 #   (a) a MANUAL bed mesh probed WITHOUT levelling the two Z motors -> one side
 #       ~1mm higher. Now BED_MESH_CALIBRATE always runs G28(if needed) +
 #       Z_TILT_ADJUST before probing.
@@ -13,6 +13,9 @@
 #   (c) the slicer emits M106 P3 S255 at print start; the stock M106 macro then
 #       turned the chamber heater OFF (TARGET=0), so a 50C chamber was killed
 #       the instant printing began. Now the fan only stops an idle chamber.
+#   (d) M191 blocked until the chamber reached target. Now it only waits until
+#       the chamber can still reach target within the first (uncooled) layers,
+#       then finishes heating during the print. Tune: SET_CHAMBER_HEADSTART S=..
 #
 # Backups: <file>.helixplus5.bak  (restore with revert.sh)
 set -eu
@@ -29,6 +32,12 @@ def backup(p):
     if not os.path.exists(b):
         shutil.copy2(p, b)
 
+def save(p, text, crlf):
+    # Keep the file's original line endings (the QIDI configs are CRLF).
+    if crlf:
+        text = text.replace("\r\n", "\n").replace("\n", "\r\n")
+    open(p, "w", newline="").write(text)
+
 BLOCK_RE = re.compile(
     r'[ \t]*# >>> HelixScreen QIDI\+5 preset.*?'
     r'# <<< HelixScreen QIDI\+5 preset[^\n]*\n',
@@ -42,14 +51,87 @@ BLOCK = (
     "  Z_TILT_ADJUST\n"
     "  # <<< HelixScreen QIDI+5 preset <<<\n")
 
+# New m191 (smart chamber soak) + helpers, replacing the stock m191 section.
+M191_NEW = '''[gcode_macro m191]
+description: Sets chamber temperature, but only waits until the chamber can still
+  reach the target within the first (uncooled) layers, then keeps heating during
+  the print.   Usage: M191 [S<temp>] [HEADSTART=<sec>]
+gcode:
+  # Just fake the R parameter for the chamber.
+  {% if printer["heater_generic chamber"] is defined %}
+    {% if "R" in params %}
+      {% set dummy = params.__setitem__("S", params.R) %}
+    {% endif %}
+    {% set target = params.S|default(0)|float %}
+    {% set headstart = params.HEADSTART|default(printer["gcode_macro _CHAMBER_CFG"].headstart_sec)|float %}
+    {% if target > 0.0 %}
+      SET_PRINT_SUB_STATUS SUB_STATUS=chamber_heating
+      {% if printer["fan_generic chamber_circulation_fan"] is defined %}
+        SET_FAN_SPEED FAN=chamber_circulation_fan SPEED=0
+      {% endif %}
+      SET_HEATER_TEMPERATURE_SCALED HEATER=chamber TARGET={target}
+      {% if printer["heater_generic chamber"].temperature < target - 0.5 %}
+        _CHAMBER_SOAK_SAMPLE
+        G4 P{(printer["gcode_macro _CHAMBER_CFG"].sample_sec|float * 1000)|int}
+        _CHAMBER_SOAK_DECIDE S={target} HEADSTART={headstart}
+      {% endif %}
+    {% endif %}
+  {% endif %}
+
+# >>> HelixScreen QIDI+5 preset: chamber head-start soak >>>
+[gcode_macro _CHAMBER_CFG]
+# Seconds the first, uncooled layers take. The chamber is only waited on until it
+# can still reach the target within this head-start, then it finishes heating
+# during the print. Tune it (per material) with:  SET_CHAMBER_HEADSTART S=<sec>
+variable_headstart_sec: 180
+# Measurement window (seconds) used to estimate the chamber heating rate.
+variable_sample_sec: 15
+gcode: {}
+
+[gcode_macro _CHAMBER_SOAK_SAMPLE]
+variable_t0: 0.0
+gcode:
+  SET_GCODE_VARIABLE MACRO=_CHAMBER_SOAK_SAMPLE VARIABLE=t0 VALUE={printer["heater_generic chamber"].temperature}
+
+[gcode_macro _CHAMBER_SOAK_DECIDE]
+gcode:
+  {% set target = params.S|float %}
+  {% set headstart = params.HEADSTART|default(printer["gcode_macro _CHAMBER_CFG"].headstart_sec)|float %}
+  {% set sample = printer["gcode_macro _CHAMBER_CFG"].sample_sec|float %}
+  {% set t0 = printer["gcode_macro _CHAMBER_SOAK_SAMPLE"].t0 %}
+  {% set t1 = printer["heater_generic chamber"].temperature %}
+  {% set rate = (t1 - t0) / sample if sample > 0.0 else 0.0 %}
+  {% if rate > 0.02 %}
+    {% set eta = (target - t1) / rate %}
+    {% set threshold = [[target - rate * headstart, 0.0]|max, target]|min %}
+    {% if eta <= headstart %}
+      {% set dummy = action_respond_info("Chamber soak: %.2f C/s, ETA %.0fs <= head-start %.0fs: printing now, chamber finishes during the first layers." % (rate, eta, headstart)) %}
+    {% else %}
+      {% set dummy = action_respond_info("Chamber soak: %.2f C/s, ETA %.0fs, head-start %.0fs: waiting only until %.1f C." % (rate, eta, headstart, threshold)) %}
+      TEMPERATURE_WAIT SENSOR="heater_generic chamber" MINIMUM={threshold}
+    {% endif %}
+  {% else %}
+    {% set dummy = action_respond_info("Chamber soak: heating rate too low to estimate (%.3f C/s): waiting for the full target." % rate) %}
+    TEMPERATURE_WAIT SENSOR="heater_generic chamber" MINIMUM={([target, 65]|min)-2}
+  {% endif %}
+
+[gcode_macro SET_CHAMBER_HEADSTART]
+description: Set the chamber head-start (seconds) used by the smart chamber soak.
+gcode:
+  SET_GCODE_VARIABLE MACRO=_CHAMBER_CFG VARIABLE=headstart_sec VALUE={params.S|float}
+  {% set dummy = action_respond_info("Chamber head-start set to %.0fs." % (params.S|float)) %}
+# <<< HelixScreen QIDI+5 preset: chamber head-start soak <<<
+'''
+
 # --- (a) Z_TILT_ADJUST before probing, in BED_MESH_CALIBRATE ---------------
 p = os.path.join(cfg, "bed_mesh.cfg")
-s = open(p).read()
+s = open(p, newline="").read()
+crlf = "\r\n" in s
 if BLOCK_RE.search(s):
     # upgrade/refresh an existing block in place
     s2 = BLOCK_RE.sub(BLOCK, s, count=1)
     if s2 != s:
-        backup(p); open(p, "w").write(s2)
+        backup(p); save(p, s2, crlf)
         print("bed_mesh.cfg   : block refreshed (upgraded)")
     else:
         print("bed_mesh.cfg   : already applied")
@@ -60,24 +142,26 @@ else:
     else:
         backup(p)
         s = s[:m.end()] + "\n" + BLOCK + s[m.end():]
-        open(p, "w").write(s)
+        save(p, s, crlf)
         print("bed_mesh.cfg   : added Z_TILT_ADJUST before probing")
 
 # --- (b1) default: do not auto-mesh at print start -------------------------
 p = os.path.join(cfg, "globals.cfg")
-s = open(p).read()
+s = open(p, newline="").read()
+crlf = "\r\n" in s
 if re.search(r'(?m)^variable_bedmesh_before_print:\s*True\s*$', s):
     backup(p)
     s = re.sub(r'(?m)^variable_bedmesh_before_print:\s*True\s*$',
                "variable_bedmesh_before_print:False", s, count=1)
-    open(p, "w").write(s)
+    save(p, s, crlf)
     print("globals.cfg    : bedmesh_before_print -> False")
 else:
     print("globals.cfg    : already False")
 
 # --- (b2) keep it off: PRINT_END G31 -> G32 --------------------------------
 p = os.path.join(cfg, "start_end.cfg")
-s = open(p).read()
+s = open(p, newline="").read()
+crlf = "\r\n" in s
 if "HelixScreen QIDI+5 preset" in s:
     print("start_end.cfg  : already applied")
 else:
@@ -85,14 +169,15 @@ else:
                     r'\1G32  # HelixScreen QIDI+5 preset: keep print-start mesh disabled',
                     s, count=1)
     if n:
-        backup(p); open(p, "w").write(s2)
+        backup(p); save(p, s2, crlf)
         print("start_end.cfg  : PRINT_END G31 -> G32")
     else:
         print("start_end.cfg  : no standalone G31 found, SKIPPED")
 
 # --- (c) chamber circulation fan must not cut the chamber heater -----------
 p = os.path.join(cfg, "fans.cfg")
-s = open(p).read()
+s = open(p, newline="").read()
+crlf = "\r\n" in s
 if "HelixScreen QIDI+5 preset: keep chamber heating" in s:
     print("fans.cfg       : already applied")
 else:
@@ -106,10 +191,25 @@ else:
             "SET_HEATER_TEMPERATURE_SCALED HEATER=chamber TARGET=0",
             "SET_HEATER_TEMPERATURE_SCALED HEATER=chamber TARGET=0"
             "  # HelixScreen QIDI+5 preset: keep chamber heating", 1)
-        backup(p); open(p, "w").write(s2)
+        backup(p); save(p, s2, crlf)
         print("fans.cfg       : M106 P3 no longer cuts an actively-heated chamber")
     else:
         print("fans.cfg       : M106 P3 condition not found, SKIPPED")
+
+# --- (d) smart chamber soak: do not block on the full chamber heat-up -------
+p = os.path.join(cfg, "heaters.cfg")
+s = open(p, newline="").read()
+crlf = "\r\n" in s
+if "HelixScreen QIDI+5 preset: chamber head-start soak" in s:
+    print("heaters.cfg    : already applied")
+else:
+    m = re.search(r'(?m)^\[gcode_macro m191\][^\n]*\n.*?(?=\n\[)', s, re.DOTALL)
+    if not m:
+        print("heaters.cfg    : m191 macro not found, SKIPPED")
+    else:
+        backup(p)
+        save(p, s[:m.start()] + M191_NEW + s[m.end():], crlf)
+        print("heaters.cfg    : m191 -> head-start chamber soak")
 PY
 
 echo

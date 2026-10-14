@@ -51,6 +51,17 @@ this repo exists, and **more of them are very welcome — see [Contributing](#co
    killed the instant the first layer began. The macro now only stops the chamber
    if it is **not** already heating, so the setpoint is respected during a print.
 
+4. **Print start blocked until the chamber reached temperature.**
+   `M191` waited for the chamber to *fully* heat before printing (minutes of dead
+   time). Now it measures the chamber heating rate and only waits until the
+   chamber can still reach target **within the first (uncooled) layers** — then
+   the print starts and the chamber finishes heating during those layers. Tune
+   the head-start (seconds ≈ the time of the first layers) with:
+
+   ```gcode
+   SET_CHAMBER_HEADSTART S=180
+   ```
+
 ```sh
 ssh qidi@<PRINTER_IP>
 sh klipper/revert.sh      # undo all macro edits (restores *.helixplus5.bak)
