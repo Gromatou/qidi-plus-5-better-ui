@@ -38,10 +38,18 @@ def save(p, text, crlf):
         text = text.replace("\r\n", "\n").replace("\n", "\r\n")
     open(p, "w", newline="").write(text)
 
+def nrm(text, crlf):
+    text = text.replace("\r\n", "\n")
+    return text.replace("\n", "\r\n") if crlf else text
+
 BLOCK_RE = re.compile(
     r'[ \t]*# >>> HelixScreen QIDI\+5 preset.*?'
     r'# <<< HelixScreen QIDI\+5 preset[^\n]*\n',
     re.DOTALL)
+
+# Matches our whole m191 + chamber-soak block (for in-place upgrades).
+SOAK_END = "# <<< HelixScreen QIDI+5 preset: chamber head-start soak <<<"
+SOAK_RE = re.compile(r'(?ms)^\[gcode_macro m191\].*?^' + re.escape(SOAK_END) + r'[^\n]*\n')
 
 BLOCK = (
     "  # >>> HelixScreen QIDI+5 preset: level the Z motors before probing >>>\n"
@@ -137,7 +145,7 @@ crlf = "\r\n" in s
 if BLOCK_RE.search(s):
     # upgrade/refresh an existing block in place
     s2 = BLOCK_RE.sub(BLOCK, s, count=1)
-    if s2 != s:
+    if nrm(s2, crlf) != nrm(s, crlf):
         backup(p); save(p, s2, crlf)
         print("bed_mesh.cfg   : block refreshed (upgraded)")
     else:
@@ -207,8 +215,13 @@ else:
 p = os.path.join(cfg, "heaters.cfg")
 s = open(p, newline="").read()
 crlf = "\r\n" in s
-if "HelixScreen QIDI+5 preset: chamber head-start soak" in s:
-    print("heaters.cfg    : already applied")
+if SOAK_RE.search(s):
+    s2 = SOAK_RE.sub(lambda _: M191_NEW, s, count=1)
+    if nrm(s2, crlf) != nrm(s, crlf):
+        backup(p); save(p, s2, crlf)
+        print("heaters.cfg    : soak block refreshed (upgraded)")
+    else:
+        print("heaters.cfg    : already applied")
 else:
     m = re.search(r'(?m)^\[gcode_macro m191\][^\n]*\n.*?(?=\n\[)', s, re.DOTALL)
     if not m:
