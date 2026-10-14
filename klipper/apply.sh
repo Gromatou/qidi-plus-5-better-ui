@@ -79,7 +79,7 @@ gcode:
     {% elif printer["gcode_macro _CHAMBER_CFG"].headstart_sec|float > 0.0 %}
       {% set headstart = printer["gcode_macro _CHAMBER_CFG"].headstart_sec|float %}
     {% elif total_min > 0.0 and tlayers > 0 %}
-      {% set headstart = [[n * (total_min * 60.0 / tlayers), 60.0]|max, 900.0]|min %}
+      {% set headstart = [[n * (total_min * 60.0 / tlayers), 10.0]|max, 900.0]|min %}
     {% else %}
       {% set headstart = 0.0 %}
     {% endif %}
@@ -110,6 +110,8 @@ variable_sample_sec: 15
 variable_uncooled_layers: 3
 # Filled automatically from M73 R (slicer remaining time, minutes).
 variable_total_min: 0.0
+# Last print filename seen, to reset the values above between prints.
+variable_last_file: ""
 gcode: {}
 
 [gcode_macro _CHAMBER_SOAK_SAMPLE]
@@ -147,7 +149,14 @@ gcode:
 [gcode_macro M73]
 rename_existing: M73.6245197
 gcode:
-  {% if "R" in params and params.R|float > printer["gcode_macro _CHAMBER_CFG"].total_min|float %}
+  {% set f = printer.print_stats.filename|default("") %}
+  {% set new_print = f != printer["gcode_macro _CHAMBER_CFG"].last_file %}
+  {% if new_print %}
+    SET_GCODE_VARIABLE MACRO=_CHAMBER_CFG VARIABLE=last_file VALUE='"{f}"'
+    SET_GCODE_VARIABLE MACRO=_CHAMBER_CFG VARIABLE=total_min VALUE=0.0
+  {% endif %}
+  {% set tmin = 0.0 if new_print else printer["gcode_macro _CHAMBER_CFG"].total_min|float %}
+  {% if "R" in params and params.R|float > tmin %}
     SET_GCODE_VARIABLE MACRO=_CHAMBER_CFG VARIABLE=total_min VALUE={params.R|float}
   {% endif %}
   M73.6245197{% for k in params %} {k}={params[k]}{% endfor %}
