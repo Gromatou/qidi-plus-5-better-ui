@@ -54,13 +54,14 @@ this repo exists, and **more of them are very welcome — see [Contributing](#co
 4. **Print start blocked until the chamber reached temperature.**
    `M191` waited for the chamber to *fully* heat before printing (minutes of dead
    time). Now it measures the chamber heating rate (with a **+20 % safety margin**)
-   and — *only if you opt in* — waits just until the chamber can still reach
-   target within the first (uncooled) layers, then the chamber finishes heating
-   during those layers. The default is deliberately cautious (**0 s** = identical
-   to stock, waits for target). Enable the time saving with:
+   and only waits until the chamber can still reach target within the first
+   (uncooled) layers — the chamber then finishes heating during those layers.
+   The head-start is derived **automatically** from data the slicer already emits
+   (`M73` remaining-time + total layer count), so **no slicer g-code change is
+   needed**. Override it if you want (0 = auto):
 
    ```gcode
-   SET_CHAMBER_HEADSTART S=180   ; ~ the time of the first uncooled layers
+   SET_CHAMBER_HEADSTART S=180
    ```
 
 ```sh

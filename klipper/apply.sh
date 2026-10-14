@@ -71,7 +71,18 @@ gcode:
       {% set dummy = params.__setitem__("S", params.R) %}
     {% endif %}
     {% set target = params.S|default(0)|float %}
-    {% set headstart = params.HEADSTART|default(printer["gcode_macro _CHAMBER_CFG"].headstart_sec)|float %}
+    {% set n = printer["gcode_macro _CHAMBER_CFG"].uncooled_layers|int %}
+    {% set total_min = printer["gcode_macro _CHAMBER_CFG"].total_min|float %}
+    {% set tlayers = printer.print_stats.info.total_layer|default(0)|int %}
+    {% if params.HEADSTART is defined %}
+      {% set headstart = params.HEADSTART|float %}
+    {% elif printer["gcode_macro _CHAMBER_CFG"].headstart_sec|float > 0.0 %}
+      {% set headstart = printer["gcode_macro _CHAMBER_CFG"].headstart_sec|float %}
+    {% elif total_min > 0.0 and tlayers > 0 %}
+      {% set headstart = [[n * (total_min * 60.0 / tlayers), 60.0]|max, 900.0]|min %}
+    {% else %}
+      {% set headstart = 0.0 %}
+    {% endif %}
     {% if target > 0.0 %}
       SET_PRINT_SUB_STATUS SUB_STATUS=chamber_heating
       {% if printer["fan_generic chamber_circulation_fan"] is defined %}
@@ -88,14 +99,17 @@ gcode:
 
 # >>> HelixScreen QIDI+5 preset: chamber head-start soak >>>
 [gcode_macro _CHAMBER_CFG]
-# Head-start (seconds): roughly how long the first, uncooled layers take.
-# Default 0 = cautious: wait until target (like stock). Set it (e.g. 180) to
-# start earlier and let the chamber finish heating during those layers.
+# Optional head-start override (seconds). 0 (default) = AUTO: derived from the
+# slicer's own M73 remaining-time and the total layer count.
 variable_headstart_sec: 0
 # Safety margin applied to the estimated heat-up time (1.2 = +20%).
 variable_margin: 1.2
 # Measurement window (seconds) used to estimate the chamber heating rate.
 variable_sample_sec: 15
+# How many (uncooled) layers the chamber should be ready by.
+variable_uncooled_layers: 3
+# Filled automatically from M73 R (slicer remaining time, minutes).
+variable_total_min: 0.0
 gcode: {}
 
 [gcode_macro _CHAMBER_SOAK_SAMPLE]
@@ -130,8 +144,16 @@ gcode:
     TEMPERATURE_WAIT SENSOR="heater_generic chamber" MINIMUM={([target, 65]|min)-2}
   {% endif %}
 
+[gcode_macro M73]
+rename_existing: M73.6245197
+gcode:
+  {% if "R" in params and params.R|float > printer["gcode_macro _CHAMBER_CFG"].total_min|float %}
+    SET_GCODE_VARIABLE MACRO=_CHAMBER_CFG VARIABLE=total_min VALUE={params.R|float}
+  {% endif %}
+  M73.6245197{% for k in params %} {k}={params[k]}{% endfor %}
+
 [gcode_macro SET_CHAMBER_HEADSTART]
-description: Set the chamber head-start (seconds) used by the smart chamber soak.
+description: Override the chamber head-start (seconds). 0 = auto (from M73).
 gcode:
   SET_GCODE_VARIABLE MACRO=_CHAMBER_CFG VARIABLE=headstart_sec VALUE={params.S|float}
   {% set dummy = action_respond_info("Chamber head-start set to %.0fs." % (params.S|float)) %}
