@@ -112,7 +112,7 @@ variable_uncooled_layers: 3
 variable_total_min: 0.0
 # Last print filename seen, to reset the values above between prints.
 variable_last_file: ""
-gcode: {}
+gcode:
 
 [gcode_macro _CHAMBER_SOAK_SAMPLE]
 variable_t0: 0.0
