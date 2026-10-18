@@ -159,7 +159,7 @@ gcode:
   {% if "R" in params and params.R|float > tmin %}
     SET_GCODE_VARIABLE MACRO=_CHAMBER_CFG VARIABLE=total_min VALUE={params.R|float}
   {% endif %}
-  M73.6245197{% for k in params %} {k}={params[k]}{% endfor %}
+  M73.6245197 P{params.P|default(0)} R{params.R|default(0)}
 
 [gcode_macro SET_CHAMBER_HEADSTART]
 description: Override the chamber head-start (seconds). 0 = auto (from M73).
