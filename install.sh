@@ -40,7 +40,10 @@ HOME_DIR="$(getent passwd "$KS_USER" 2>/dev/null | cut -d: -f6)"
 [ -n "$HOME_DIR" ] || HOME_DIR="$HOME"
 HS_DIR="${HOME_DIR}/helixscreen"
 HS_ASSETS="${HS_DIR}/assets"
-HS_CONFIG="${HOME_DIR}/printer_data/config/helixscreen"
+# HelixScreen 1.0.6+ keeps its writable config in helixscreen/config; older
+# builds used printer_data/config/helixscreen. Use whichever exists.
+HS_CONFIG="${HS_DIR}/config"
+[ -d "$HS_CONFIG" ] || HS_CONFIG="${HOME_DIR}/printer_data/config/helixscreen"
 PLAYER="${HOME_DIR}/QIDI_Client/bin/qidiclient"
 
 say() { printf '\n\033[0;36m%s\033[0m\n' "$*"; }
@@ -56,6 +59,8 @@ sh "${HERE}/klipper/apply.sh"
 
 # =============================================================================
 say "[2/5] Installing / updating HelixScreen"
+echo "      (sudo may ask for your password once — default 'qiditech')"
+sudo -v 2>/dev/null || true
 if [ -d "$HS_DIR" ]; then
     curl -sSL https://releases.helixscreen.org/install.sh | sh -s -- --update
 else
@@ -65,10 +70,11 @@ ok "HelixScreen installed"
 
 # =============================================================================
 say "[3/5] Adding the QIDI Plus 5 profile (pre-release)"
-mkdir -p "${HS_CONFIG}/printer_database.d"
+mkdir -p "${HS_CONFIG}/printer_database.d" "${HS_CONFIG}/presets" \
+         "${HS_ASSETS}/config/presets" "${HS_ASSETS}/images/printers"
 cp -f "${HERE}/files/printer_database.d/qidi-plus5.json" \
       "${HS_CONFIG}/printer_database.d/qidi-plus5.json"
-mkdir -p "${HS_ASSETS}/config/presets" "${HS_ASSETS}/images/printers"
+cp -f "${HERE}/files/presets/qidi_plus5.json" "${HS_CONFIG}/presets/qidi_plus5.json"
 cp -f "${HERE}/files/presets/qidi_plus5.json" "${HS_ASSETS}/config/presets/qidi_plus5.json"
 cp -f "${HERE}/files/images/printers/qidi-plus-5.png" "${HS_ASSETS}/images/printers/qidi-plus-5.png"
 ok "Plus 5 profile + preset + image in place"
@@ -77,6 +83,20 @@ ok "Plus 5 profile + preset + image in place"
 say "[4/5] Reloading Klipper and the screen UI"
 curl -s -m 10 -G "http://127.0.0.1:7125/printer/gcode/script" \
      --data-urlencode "script=FIRMWARE_RESTART" >/dev/null 2>&1 || true
+sudo systemctl stop helixscreen 2>/dev/null || true
+# The QIDI's 480x800 panel is mounted rotated; keep HelixScreen upright. Patch
+# the saved setting while the app is stopped so it does not rewrite it on exit.
+if [ -f "${HS_CONFIG}/settings.json" ]; then
+    python3 - "${HS_CONFIG}/settings.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d.setdefault("display", {})["rotate"] = 90
+d["display"]["rotation_probed"] = True
+json.dump(d, open(p, "w"), indent=2)
+print("rotation      : display.rotate=90")
+PY
+fi
 sudo systemctl restart helixscreen 2>/dev/null || true
 
 # =============================================================================
