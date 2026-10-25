@@ -88,6 +88,23 @@ is never disturbed. A handy side effect: after a QIDI firmware update wipes the
 macros, the next reboot restores the fixes automatically. `install.sh` enables it
 for you.
 
+### QIDI Box (AMS, 4 spools)
+
+The QIDI Box is auto-detected by Klipper only when `box.cfg` exists; the stock QIDI
+UI normally writes it, so a HelixScreen install otherwise shows only "external
+filament". To enable it from the shell:
+
+```sh
+sh klipper/enable-box.sh     # detects /dev/serial/by-id/usb-Klipper_QIDI_BOX_*
+# then: FIRMWARE_RESTART
+```
+
+> **Box firmware must match the host.** An older Box MCU fails at startup with
+> `mcu 'mcu_box1': Unknown command: irq_button_query`. The fix is the stock QIDI
+> firmware update (it also flashes the Box, target `QD_PLUS5_BOX_02.03.01.21`).
+> Only after that does `enable-box.sh` yield a working `multi_color_controller`
+> (`hardware.box_count = 1`).
+
 ### Why a script and not a `[include]`
 
 Klipper parses configs with `configparser(strict=False)` and **merges same-named
