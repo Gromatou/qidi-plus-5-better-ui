@@ -173,6 +173,8 @@ gcode:
 p = os.path.join(cfg, "bed_mesh.cfg")
 s = open(p, newline="").read()
 crlf = "\r\n" in s
+if crlf:
+    s = s.replace("\r\n", "\n")
 if BLOCK_RE.search(s):
     # upgrade/refresh an existing block in place
     s2 = BLOCK_RE.sub(BLOCK, s, count=1)
@@ -195,6 +197,8 @@ else:
 p = os.path.join(cfg, "globals.cfg")
 s = open(p, newline="").read()
 crlf = "\r\n" in s
+if crlf:
+    s = s.replace("\r\n", "\n")
 if re.search(r'(?m)^variable_bedmesh_before_print:\s*True\s*$', s):
     backup(p)
     s = re.sub(r'(?m)^variable_bedmesh_before_print:\s*True\s*$',
@@ -208,6 +212,8 @@ else:
 p = os.path.join(cfg, "start_end.cfg")
 s = open(p, newline="").read()
 crlf = "\r\n" in s
+if crlf:
+    s = s.replace("\r\n", "\n")
 if "HelixScreen QIDI+5 preset" in s:
     print("start_end.cfg  : already applied")
 else:
@@ -224,6 +230,8 @@ else:
 p = os.path.join(cfg, "fans.cfg")
 s = open(p, newline="").read()
 crlf = "\r\n" in s
+if crlf:
+    s = s.replace("\r\n", "\n")
 if "HelixScreen QIDI+5 preset: keep chamber heating" in s:
     print("fans.cfg       : already applied")
 else:
@@ -246,6 +254,8 @@ else:
 p = os.path.join(cfg, "heaters.cfg")
 s = open(p, newline="").read()
 crlf = "\r\n" in s
+if crlf:
+    s = s.replace("\r\n", "\n")
 if SOAK_RE.search(s):
     s2 = SOAK_RE.sub(lambda _: M191_NEW, s, count=1)
     if nrm(s2, crlf) != nrm(s, crlf):
