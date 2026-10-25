@@ -70,10 +70,12 @@ ok "HelixScreen installed"
 
 # =============================================================================
 say "[3/5] Adding the QIDI Plus 5 profile (pre-release)"
-mkdir -p "${HS_CONFIG}/printer_database.d" "${HS_CONFIG}/presets" \
-         "${HS_ASSETS}/config/presets" "${HS_ASSETS}/images/printers"
-cp -f "${HERE}/files/printer_database.d/qidi-plus5.json" \
-      "${HS_CONFIG}/printer_database.d/qidi-plus5.json"
+# On HelixScreen 1.0.6+ printer_database.d is a symlink into
+# printer_data/config/helixscreen; create the real target before copying.
+PDD="${HS_CONFIG}/printer_database.d"
+if [ -L "$PDD" ]; then mkdir -p "$(readlink -f "$PDD")"; else mkdir -p "$PDD"; fi
+mkdir -p "${HS_CONFIG}/presets" "${HS_ASSETS}/config/presets" "${HS_ASSETS}/images/printers"
+cp -f "${HERE}/files/printer_database.d/qidi-plus5.json" "${PDD}/qidi-plus5.json"
 cp -f "${HERE}/files/presets/qidi_plus5.json" "${HS_CONFIG}/presets/qidi_plus5.json"
 cp -f "${HERE}/files/presets/qidi_plus5.json" "${HS_ASSETS}/config/presets/qidi_plus5.json"
 cp -f "${HERE}/files/images/printers/qidi-plus-5.png" "${HS_ASSETS}/images/printers/qidi-plus-5.png"
