@@ -1,12 +1,3 @@
-[mcu mcu_box1]
-serial: @BOX_SERIAL@
-restart_method: command
-
-[box_extras]
-b_button_pin: ^mcu_box1:PB1
-b_endstop_pin: mcu_box1:PA9
-e_endstop_pin: mcu_box1:PA10
-
 [box_config box0]
 runout_pin_0: mcu_box1:PA0
 step_pin_0: mcu_box1:PC14
@@ -34,7 +25,7 @@ white_pin_3: mcu_box1:PC4
 red_pin_3: mcu_box1:PC5
 microsteps: 16
 rotation_distance: 13.6
-step_pulse_duration: 0.000000100
+step_pulse_duration:0.000000100
 heater_pin_heater_generic: mcu_box1:PA3
 sensor_type_heater_generic: AHT20_F
 i2c_bus_heater_generic: i2c3
@@ -61,21 +52,31 @@ max_temp_temperature_sensor_1: 130
 pin_box_heater_fan_0: mcu_box1:PA4
 heater_box_heater_fan_0: heater_box1
 heater_temp_box_heater_fan_0: 35
-stepper_box_heater_fan_0: box_stepper slot0,box_stepper slot1,box_stepper slot2,box_stepper slot3
+stepper_box_heater_fan_0:
 idle_timeout_box_heater_fan_0: 60
 pin_box_heater_fan_1: mcu_box1:PA5
 heater_box_heater_fan_1: heater_box1
 heater_temp_box_heater_fan_1: 35
-stepper_box_heater_fan_1: box_stepper slot0,box_stepper slot1,box_stepper slot2,box_stepper slot3
+stepper_box_heater_fan_1:
 idle_timeout_box_heater_fan_1: 60
 pin_controller_fan: mcu_box1:PA6
 heater_controller_fan: heater_box1
-stepper_controller_fan: box_stepper slot0,box_stepper slot1,box_stepper slot2,box_stepper slot3
+stepper_controller_fan: slot0, slot1, slot2, slot3
 cs_pin_box_rfid_0: mcu_box1:PC6
 cs_pin_box_rfid_1: mcu_box1:PC7
 
+[box_extras]
+b_button_pin : ^mcu_box1:PB1
+b_endstop_pin : mcu_box1:PA9
+e_endstop_pin : mcu_box1:PA10
+
 [box_autofeed]
-limit_pin: ^!mcu_box1:PB0
+limit_pin:^!mcu_box1:PB0
 v_feed: 100
 lmax: 120
 dir: 0
+
+[mcu mcu_box1]
+serial: @BOX_SERIAL@
+restart_method : command
+
